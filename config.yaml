@@ -1,0 +1,36 @@
+
+meta_csv: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/meta_segments.csv"
+out_dir: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package"
+target_fs: 32000
+bandpass: {fmin: 500, fmax: 10000, order: 4}
+env_spec: {n_fft: 0, window: "hann", detrend: "constant"}
+stft: {enable: true, nperseg: 2048, noverlap: 1024, nfft: 2048, window: "hann"}
+feat_band_rel_width: 0.05
+sidebands: {k_max: 3}
+save: {raw_resampled: true, envelope: true, env_spectrum: true, stft_mag: false, features_csv: true}
+proc: {max_rows: 0, skip_if_missing: true, log_every: 200}
+columns:
+  uid: "uid"
+  file_path: "file_path"
+  var_name: "var_name"
+  idx_in_file: "idx_in_file"
+  segment_len_s: "segment_len_s"
+  hop_s: "hop_s"
+  fs_raw: "fs_raw"
+  fs: "fs"
+  domain: "domain"
+  label: "label"
+  sensor: "sensor"
+  rpm: "rpm"
+  fr_hz: "fr_hz"
+  Nd: "Nd"
+  d_in: "d_in"
+  D_in: "D_in"
+  BPFO: "BPFO"
+  BPFI: "BPFI"
+  BSF: "BSF"
+  FTF: "FTF"
+
+# Optional path prefix remapping (list of {from: ..., to: ...})
+path_map:
+  - {from: "/Users/hanibote/Desktop/Modeling", to: "/Users/hanibote/Desktop/Modeling"}
