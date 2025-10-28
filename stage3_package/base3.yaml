@@ -1,0 +1,76 @@
+
+# === Stage 3 Configuration (UDA + Pseudo-Labeling on Spectrograms) ===
+meta_csv: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/meta_segments.csv"
+spectrogram_dir: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/stage1_package/preproc/spectrograms"  # expects subdirs 'source' and 'target'
+stage2_ckpt: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/stage2_outputs/ckpt_best.pt"      # optional warm start
+out_dir: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/stage3_outputs"
+
+# columns in meta
+columns:
+  uid: "uid"
+  domain: "domain"
+  label: "label"
+  file_path: "file_path"
+  group_id: "group_id"
+
+# data settings
+image:
+  ext: ".png"
+  height: 480
+  width: 640
+
+split:
+  # For source only (target is unsupervised)
+  train_ratio: 0.6
+  val_ratio: 0.2
+  test_ratio: 0.2
+  random_seed: 3407
+  use_groups: true
+
+# UDA method
+uda:
+  method: "dann"        # "dann" | "mmd" | "coral"
+  lambda_uda: 1.0
+  warmup_epochs: 15
+  cls_label_smoothing: 0.0
+  # dynamic source weights from domain disc prob(target|source)
+  dyn_weight:
+    enable: true
+    alpha: 0.3          # w = alpha + (1-alpha) * p_target(source_sample)
+  # MMD settings (only if method=mmd)
+  mmd:
+    kernel: "rbf"
+    sigma: "median"     # or float
+  # CORAL has no extra params
+
+# training
+train:
+  backbone: "resnet18"
+  epochs: 60
+  batch_size_src: 64
+  batch_size_tgt: 64
+  num_workers: 4
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  step_lr:
+    enable: true
+    step_size: 20
+    gamma: 0.1
+  class_weighting: "balanced"  # "none" or "balanced"
+
+# Pseudo-labeling (after UDA)
+plabel:
+  enable: true
+  threshold_first: 0.90
+  threshold_second: 0.85
+  max_rounds: 2
+  epochs_each: 10
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+
+# Logging/plots
+log:
+  save_every: 5
+
+# reproducibility
+seed: 3407
