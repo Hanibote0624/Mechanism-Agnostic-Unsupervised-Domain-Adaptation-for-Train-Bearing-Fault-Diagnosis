@@ -1,0 +1,69 @@
+# python3 -m src.train_source --config exp/configs/base2.yaml
+# python3 -m src.eval_only --config exp/configs/base2.yaml --ckpt stage2_outputs/ckpt_best0.pt
+
+# === Stage 2 Configuration (Source-Domain Training on Spectrograms) ===
+meta_csv: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/meta_segments.csv"
+spectrogram_dir: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/stage1_package/preproc/spectrograms"  # expects subdirs 'source' and 'target'
+out_dir: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/stage1_package/stage2_outputs"
+
+# columns in meta
+columns:
+  uid: "uid"
+  domain: "domain"
+  label: "label"
+  file_path: "file_path"        # used as group if group_id missing
+  group_id: "group_id"          # if missing, fallback to file_path
+  sensor: "sensor"              # optional, for stratified analysis
+
+# data settings
+image:
+  subdir: "source"              # only train on source domain images
+  ext: ".png"                   # or ".jpg"
+  height: 480
+  width: 640
+
+split:
+  train_ratio: 0.6
+  val_ratio: 0.2
+  test_ratio: 0.2
+  random_seed: 3407
+  # use groups to avoid file-level leakage
+  use_groups: true
+
+# training
+train:
+  backbone: "resnet18"          # "resnet18" or "convnext_tiny"
+  epochs: 60
+  batch_size: 64
+  num_workers: 4
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  step_lr:
+    enable: true
+    step_size: 20
+    gamma: 0.1
+  label_smoothing: 0.0
+  class_weighting: "balanced"   # "none" or "balanced"
+
+# augmentations (lightweight, protect periodicity)
+augment:
+  time_mask_prob: 0.3
+  time_mask_max_ratio: 0.1
+  freq_mask_prob: 0.3
+  freq_mask_max_ratio: 0.1
+  noise_prob: 0.2
+  noise_snr_db: 25.0
+
+# logging & evaluation
+log:
+  save_every: 5
+  tb_enable: false
+
+eval:
+  topk: [1]
+  report_confusion: true
+  report_pr_curves: true
+  reliability_bins: 15
+
+# reproducibility
+seed: 3407
