@@ -1,0 +1,203 @@
+
+# === Stage 1 Configuration (Unified STFT imaging) ===
+meta_csv: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/meta_segments.csv"
+out_dir: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/stage1_package"
+
+# When reading .mat and slicing
+columns:
+  uid: "uid"
+  domain: "domain"         # source/target
+  file_path: "file_path"
+  var_name: "var_name"
+  idx_in_file: "idx_in_file"
+  segment_len_s: "segment_len_s"
+  hop_s: "hop_s"
+  fs_raw: "fs_raw"         # if missing, fallback to 'fs'
+  fs: "fs"
+
+# Resampling & filtering
+target_fs: 32000
+bandpass:
+  enable: true
+  fmin: 500
+  fmax: 10000
+  order: 4
+detrend: true
+
+# STFT parameters
+stft:
+  nperseg: 2048
+  noverlap: 1024
+  nfft: 2048
+  window: "hann"
+  fmax_plot: 10000     # crop frequency axis to this max (Hz)
+
+# Magnitude processing
+magnitude:
+  log1p: true          # apply log(1+x)
+  qmin: 0.01           # lower quantile for clipping
+  qmax: 0.99           # upper quantile for clipping
+  epsilon: 1.0e-6
+
+# Image export
+image:
+  width: 640
+  height: 480
+  # dark = high energy (invert after normalization)
+  invert_for_dark_high: true
+  format: "png"        # png or jpg
+
+# Processing
+proc:
+  max_rows: 0          # 0 -> all rows; else limit for a quick dry-run
+  log_every: 200
+  skip_if_missing: true
+
+
+#python3 -m src.export_spectrograms --config exp/configs/base.yaml
+# python3 -m src.train_source --config exp/configs/base2.yaml
+# python3 -m src.eval_only --config exp/configs/base2.yaml --ckpt stage2_outputs/ckpt_best0.pt
+
+# === Stage 2 Configuration (Source-Domain Training on Spectrograms) ===
+meta_csv: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/meta_segments.csv"
+spectrogram_dir: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/stage1_package/preproc/spectrograms"  # expects subdirs 'source' and 'target'
+out_dir: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/stage1_package/stage2_outputs"
+
+# columns in meta
+columns:
+  uid: "uid"
+  domain: "domain"
+  label: "label"
+  file_path: "file_path"        # used as group if group_id missing
+  group_id: "group_id"          # if missing, fallback to file_path
+  sensor: "sensor"              # optional, for stratified analysis
+
+# data settings
+image:
+  subdir: "source"              # only train on source domain images
+  ext: ".png"                   # or ".jpg"
+  height: 480
+  width: 640
+
+split:
+  train_ratio: 0.6
+  val_ratio: 0.2
+  test_ratio: 0.2
+  random_seed: 3407
+  # use groups to avoid file-level leakage
+  use_groups: true
+
+# training
+train:
+  backbone: "resnet18"          # "resnet18" or "convnext_tiny"
+  epochs: 60
+  batch_size: 64
+  num_workers: 4
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  step_lr:
+    enable: true
+    step_size: 20
+    gamma: 0.1
+  label_smoothing: 0.0
+  class_weighting: "balanced"   # "none" or "balanced"
+
+# augmentations (lightweight, protect periodicity)
+augment:
+  time_mask_prob: 0.3
+  time_mask_max_ratio: 0.1
+  freq_mask_prob: 0.3
+  freq_mask_max_ratio: 0.1
+  noise_prob: 0.2
+  noise_snr_db: 25.0
+
+# logging & evaluation
+log:
+  save_every: 5
+  tb_enable: false
+
+eval:
+  topk: [1]
+  report_confusion: true
+  report_pr_curves: true
+  reliability_bins: 15
+
+# reproducibility
+seed: 3407
+
+
+# === Stage 3 Configuration (UDA + Pseudo-Labeling on Spectrograms) ===
+meta_csv: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/meta_segments.csv"
+spectrogram_dir: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/stage1_package/preproc/spectrograms"  # expects subdirs 'source' and 'target'
+stage2_ckpt: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/stage2_outputs/ckpt_best.pt"      # optional warm start
+out_dir: "/Users/hanibote/Desktop/Modeling/数据集/route_b_package/stage3_outputs"
+
+# columns in meta
+columns:
+  uid: "uid"
+  domain: "domain"
+  label: "label"
+  file_path: "file_path"
+  group_id: "group_id"
+
+# data settings
+image:
+  ext: ".png"
+  height: 480
+  width: 640
+
+split:
+  # For source only (target is unsupervised)
+  train_ratio: 0.6
+  val_ratio: 0.2
+  test_ratio: 0.2
+  random_seed: 3407
+  use_groups: true
+
+# UDA method
+uda:
+  method: "dann"        # "dann" | "mmd" | "coral"
+  lambda_uda: 1.0
+  warmup_epochs: 15
+  cls_label_smoothing: 0.0
+  # dynamic source weights from domain disc prob(target|source)
+  dyn_weight:
+    enable: true
+    alpha: 0.3          # w = alpha + (1-alpha) * p_target(source_sample)
+  # MMD settings (only if method=mmd)
+  mmd:
+    kernel: "rbf"
+    sigma: "median"     # or float
+  # CORAL has no extra params
+
+# training
+train:
+  backbone: "resnet18"
+  epochs: 60
+  batch_size_src: 64
+  batch_size_tgt: 64
+  num_workers: 4
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  step_lr:
+    enable: true
+    step_size: 20
+    gamma: 0.1
+  class_weighting: "balanced"  # "none" or "balanced"
+
+# Pseudo-labeling (after UDA)
+plabel:
+  enable: true
+  threshold_first: 0.90
+  threshold_second: 0.85
+  max_rounds: 2
+  epochs_each: 10
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+
+# Logging/plots
+log:
+  save_every: 5
+
+# reproducibility
+seed: 3407
